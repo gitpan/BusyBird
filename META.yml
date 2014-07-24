@@ -94,5 +94,5 @@ requires:
   sort: '0'
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
-  repository: git://github.com/debug-ito/busybird.git
-version: '0.02'
+  repository: https://github.com/debug-ito/busybird
+version: '0.03'

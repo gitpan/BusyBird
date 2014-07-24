@@ -5,7 +5,7 @@ use BusyBird::Main;
 use BusyBird::Main::PSGI qw(create_psgi_app);
 use Exporter qw(import);
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 our @EXPORT = our @EXPORT_OK = qw(busybird timeline end);
 
@@ -260,6 +260,15 @@ if you do not have CPAN RT account.
  
 Toshio Ito, C<< <toshioito at cpan.org> >>
 
+=head1 CONTRIBUTORS
+
+=over
+
+=item *
+
+Keisuke Minami
+
+=back
 
 =head1 LICENSE AND COPYRIGHT
 

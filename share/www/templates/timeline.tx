@@ -1,4 +1,4 @@
-: ## WRAPPER "wrapper_document.tt" WITH script_name = script_name, title = timeline_name
+: ## Arguments: script_name, timeline_name, post_button_url, timeline_config_json
 : cascade wrapper_navbar { script_name => $script_name, title => $timeline_name }
 : around navbar_content -> {
 <form class="navbar-form navbar-right bb-nav-controls-container">
@@ -39,7 +39,7 @@
         <div class="panel-group" id="bb-statuses-summary"></div>
       </div>
     </div>
-    <div class="col-xs-12 col-sm-10 col-md-8">
+    <div class="col-xs-12 col-sm-10 col-md-8 bb-main-column">
       <ul id="statuses" class="list-unstyled">
       </ul>
       <div id="main-footer">
@@ -67,7 +67,8 @@
     };
     
     var NewStatusesButton = function(args) {
-        // @params: args.unackedCountsPoller, args.spinner, args.statusContainer, args.messageBanner, args.statusesSummary
+        // @params: args.unackedCountsPoller, args.spinner, args.statusContainer,
+        //          args.messageBanner, args.statusesSummary, args.notification
         var self = this;
         var poller = args.unackedCountsPoller;
         self.enabled = false;
@@ -76,16 +77,17 @@
         self.status_container = args.statusContainer;
         self.message_banner = args.messageBanner;
         self.statuses_summary = args.statusesSummary;
+        self.notification = args.notification;
         self.cur_unacked_counts = {total: 0};
 
         self._setEnabled(false);
         $("#bb-new-statuses-button").on("click", function() { self.trigger(); return false; });
         poller.listenOnChange(function(unacked_counts) {
             self.cur_unacked_counts = unacked_counts;
-            self._updateUnackedCountView();
+            self._updateUnackedCountView(true);
         });
         self.status_container.listenOnThresholdLevelChanged(function() {
-            self._updateUnackedCountView();
+            self._updateUnackedCountView(false);
         });
     };
     NewStatusesButton.prototype = {
@@ -99,10 +101,19 @@
                 $button.addClass("disabled");
             }
         },
-        _updateUnackedCountView: function() {
+        _updateUnackedCountView: function(show_web_notification) {
             var self = this;
+            var timeline_name = self.status_container.getTimelineName();
             var visible_count = self._visibleUnackedCount();
-            document.title = (visible_count > 0 ? '('+ visible_count +') ' : "") + document.title.replace(/^\([0-9]*\) */, "");
+            if(show_web_notification && visible_count > 0) {
+                self.notification.showWebNotification({
+                    message: visible_count + ' new statuses!', tag: timeline_name + '/notifyNewStatuses',
+                    subtitle: timeline_name,
+                    onClick: function() { self.trigger(); }
+                });
+            }
+            self.notification.setFaviconAlert(visible_count > 0);
+            self.notification.setTitleNotification(visible_count > 0 ? '('+ visible_count +')' : null);
             $(".bb-new-statuses-num").text(visible_count);
             if(visible_count > 0 && !self.now_loading) {
                 self._setEnabled(true);
@@ -138,7 +149,7 @@
             }).then(function() {
                 self.spinner.end();
                 self.now_loading = false;
-                self._updateUnackedCountView();
+                self._updateUnackedCountView(false);
             });
         }
     };
@@ -217,6 +228,20 @@
     $(function() {
         var spinner = new bb.Spinner("#bb-spinner-placeholder");
         var message_banner = new bb.MessageBanner("#bb-msg");
+        var timeline_config;
+        try {
+            timeline_config = JSON.parse("<: $timeline_config_json | js :>");
+        }catch(e) {
+            var error_message = "Error while parsing timeline config.";
+            console.error(error_message);
+            console.error(e);
+            message_banner.show(error_message, "error");
+            timeline_config = {};
+        }
+        var notification = new bb.Notification({scriptName: "<: $script_name | js :>"});
+        if(timeline_config.timeline_web_notifications === "simple") {
+            notification.initWebNotification();
+        }
         var status_container = new bb.StatusContainer({
             selectorContainer: "#statuses", timeline: '<: $timeline_name | js :>',
             apiBase: '<: $script_name | js :>'
@@ -230,7 +255,8 @@
         var new_statuses_button = new NewStatusesButton({
             unackedCountsPoller: unacked_counts_poller,
             spinner: spinner, statusContainer: status_container,
-            messageBanner: message_banner, statusesSummary: statuses_summary
+            messageBanner: message_banner, statusesSummary: statuses_summary,
+            notification: notification
         });
         var more_statuses_button = new MoreStatusesButton({
             spinner: spinner, messageBanner: message_banner,

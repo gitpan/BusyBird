@@ -1,5 +1,4 @@
 : ## Arguments: script_name, timeline_unacked_counts_json, page_list, last_page (begin with 0), cur_page (begin with 0)
-: ## WRAPPER "wrapper_document.tt" WITH script_name = script_name
 : cascade wrapper_navbar { script_name => $script_name }
 
 <: macro pagination -> { -:>
@@ -19,7 +18,7 @@
 : around content -> {
 <div class="container-fluid">
   <div class="row">
-    <div class="col-sm-8 col-sm-offset-2">
+    <div class="col-sm-8 col-sm-offset-2 bb-main-column">
       <: pagination() :>
       <table id="bb-timeline-list" class="table table-striped">
         <thead><tr>
@@ -48,10 +47,25 @@
 <script type="text/javascript" src="<: $script_name :>/static/timeline_list.js"></script>
 <script type="text/javascript">
 "use strict";
+
+var getTotalUnackedCount = function() {
+    var total = 0;
+    $("td.bb-timeline-unacked-counts-total-cell").each(function() {
+        total += parseInt($(this).text(), 10);
+    });
+    return total;
+};
+
 $(function() {
     var poller = new bb.UnackedCountsPoller({
         apiBase: "<: $script_name | js :>"
     });
+    var notification = new bb.Notification({
+        scriptName: "<: $script_name | js :>"
+    });
+    var updateFavicon = function() {
+        notification.setFaviconAlert(getTotalUnackedCount() > 0);
+    };
     $("#bb-timeline-list tbody tr").each(function() {
         var $row = $(this);
         var renderer = new bb.UnackedCountsRenderer({
@@ -60,18 +74,18 @@ $(function() {
         });
         var counts = $row.data("bbInitCounts");
         var name = $row.find(".bb-timeline-name").text();
-        console.log("counts data for " + name);
-        console.log(counts);
         renderer.show(counts);
         poller.addTimeline({
             timelineName: name,
             initialUnackedCounts: counts,
             callback: function(received_counts) {
                 renderer.show(received_counts);
+                updateFavicon();
             }
         });
     });
     poller.start();
+    updateFavicon();
 });
 </script>
 : } ## around content

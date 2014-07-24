@@ -38,6 +38,8 @@ share/www/static/bootstrap/fonts/glyphicons-halflings-regular.woff
 share/www/static/bootstrap/js/bootstrap.min.js
 share/www/static/busybird.css
 share/www/static/busybird.js
+share/www/static/favicon_alert.ico
+share/www/static/favicon_normal.ico
 share/www/static/jquery.js
 share/www/static/q.js
 share/www/static/spin.js
@@ -74,6 +76,7 @@ t/Util_split.t
 t/WebAPI.t
 t/WebAPI_html.t
 xt/js/message_banner.html
+xt/js/notification.html
 xt/js/qunit.css
 xt/js/qunit.js
 xt/js/sinon.js

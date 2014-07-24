@@ -120,8 +120,8 @@
          "web" : "https://github.com/debug-ito/busybird/issues"
       },
       "repository" : {
-         "url" : "git://github.com/debug-ito/busybird.git"
+         "url" : "https://github.com/debug-ito/busybird"
       }
    },
-   "version" : "0.02"
+   "version" : "0.03"
 }

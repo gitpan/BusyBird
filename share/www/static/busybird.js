@@ -207,4 +207,77 @@ bb.EventPoller.prototype = {
     },
 };
 
+bb.Notification = function(args) {
+    // @params: args.titleBase (default: current value of <title>)
+    //          args.scriptName (default: "")
+    if(!defined(args)) args = {};
+    this.init_web_notifications_done = false;
+    this.title_base = defined(args.titleBase) ? args.titleBase : document.title;
+    this.script_name = defined(args.scriptName) ? args.scriptName : "";
+};
+bb.Notification.prototype = {
+    _isWebNotificationEnabled: function() {
+        return this.init_web_notifications_done && window.Notification && window.Notification.permission === 'granted';
+    },
+    initWebNotification: function() {
+        // @returns a promise resolved when initialization is done. If
+        // Web Notification is permitted, the promise
+        // fulfills. Otherwise it rejects.
+        var self = this;
+        var init_defer = Q.defer();
+        var resolve_init = function(permission) {
+            if(permission === 'granted') {
+                init_defer.resolve();
+            }else {
+                init_defer.reject("Web Notification is denied (perhaps by the user)");
+            }
+            self.init_web_notifications_done = true;
+        };
+        if(window.Notification) {
+            if(window.Notification.permission === 'default') {
+                window.Notification.requestPermission(resolve_init);
+            }else {
+                resolve_init(window.Notification.permission);
+            }
+        }else {
+            init_defer.reject("Web Notification is not supported in this environment.");
+        }
+        return init_defer.promise;
+    },
+    _getFaviconPath: function(type) {
+        // @param type either "normal" or "alert".
+        return this.script_name + "/static/favicon_" + type + ".ico";
+    },
+    setFaviconAlert: function(is_alert) {
+        var self = this;
+        var favicon_type = is_alert ? "alert" : "normal";
+        $("link[rel='shortcut icon']").remove();
+        
+        $("head").append( $('<link rel="shortcut icon"></link>').attr('href', self._getFaviconPath(favicon_type)) );
+    },
+    showWebNotification: function(args) {
+        // @params: args.message, args.tag, subtitle,
+        //          args.onClick (optional) (function (message) returning nothing)
+        var self = this;
+        if(!self._isWebNotificationEnabled()) return;
+        var message = args.message;
+        var onclick = args.onClick;
+        var title = defined(args.subtitle) ? args.subtitle + ' - BusyBird' : 'BusyBird';
+        var notification = new Notification(title, {
+            body: message, tag: args.tag, icon: self._getFaviconPath("alert")
+        });
+        notification.onclick = function() {
+            this.close();
+            if(defined(onclick)) onclick(message);
+        };
+    },
+    setTitleNotification: function(message) {
+        if(defined(message) && message !== "") {
+            document.title = message + " " + this.title_base;
+        }else {
+            document.title = this.title_base;
+        }
+        
+    },
+};
 
