@@ -9,8 +9,8 @@
       "perl_5"
    ],
    "meta-spec" : {
-      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
-      "version" : "2"
+      "url" : "https://metacpan.org/pod/CPAN::Meta::Spec",
+      "version" : 2
    },
    "name" : "BusyBird",
    "no_index" : {
@@ -45,6 +45,7 @@
             "Async::Queue" : "0.02",
             "Async::Selector" : "1.03",
             "Async::Selector::Aggregator" : "1.02",
+            "BusyBird::DateTime::Format" : "0.04",
             "CPS" : "0.15",
             "Cache::Memory::Simple" : "1.01",
             "Carp" : "0",
@@ -92,6 +93,7 @@
       },
       "test" : {
          "requires" : {
+            "BusyBird::DateTime::Format" : "0.04",
             "DBD::SQLite" : "0",
             "DBI" : "0",
             "DateTime" : "0",
@@ -120,8 +122,9 @@
          "web" : "https://github.com/debug-ito/busybird/issues"
       },
       "repository" : {
-         "url" : "https://github.com/debug-ito/busybird"
+         "url" : "git://github.com/debug-ito/busybird.git",
+         "web" : "https://github.com/debug-ito/busybird"
       }
    },
-   "version" : "0.03"
+   "version" : "0.04"
 }

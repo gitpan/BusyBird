@@ -3,7 +3,6 @@ Build.PL
 Changes
 cpanfile
 lib/BusyBird.pm
-lib/BusyBird/DateTime/Format.pm
 lib/BusyBird/Filter.pm
 lib/BusyBird/Filter/Twitter.pm
 lib/BusyBird/Flow.pm
@@ -53,7 +52,6 @@ share/www/templates/wrapper_document.tx
 share/www/templates/wrapper_navbar.tx
 t/BusyBird.t
 t/Config.t
-t/DateTime_Format.t
 t/Filter.t
 t/Filter_Twitter.t
 t/Flow.t

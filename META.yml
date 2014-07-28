@@ -3,6 +3,7 @@ abstract: 'a multi-level Web-based timeline viewer'
 author:
   - 'Toshio Ito <toshioito@cpan.org>'
 build_requires:
+  BusyBird::DateTime::Format: '0.04'
   DBD::SQLite: '0'
   DBI: '0'
   DateTime: '0'
@@ -49,6 +50,7 @@ requires:
   Async::Queue: '0.02'
   Async::Selector: '1.03'
   Async::Selector::Aggregator: '1.02'
+  BusyBird::DateTime::Format: '0.04'
   CPS: '0.15'
   Cache::Memory::Simple: '1.01'
   Carp: '0'
@@ -94,5 +96,5 @@ requires:
   sort: '0'
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
-  repository: https://github.com/debug-ito/busybird
-version: '0.03'
+  repository: git://github.com/debug-ito/busybird.git
+version: '0.04'
