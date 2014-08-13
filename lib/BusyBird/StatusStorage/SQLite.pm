@@ -5,10 +5,10 @@ use parent ("BusyBird::StatusStorage");
 use DBI;
 use Carp;
 use Try::Tiny;
-use SQL::Maker;
+use SQL::Maker 1.19;
+use SQL::QueryMaker 0.03 qw(sql_and sql_eq sql_ne sql_or sql_lt sql_le sql_raw);
 use BusyBird::DateTime::Format;
 use BusyBird::Util qw(set_param);
-use BusyBird::StatusStorage::Common qw(contains);
 use JSON;
 use Scalar::Util qw(looks_like_number);
 use DateTime::Format::Strptime;
@@ -43,7 +43,7 @@ my $UNDEF_TIMESTAMP = '9999-99-99T99:99:99';
 sub new {
     my ($class, %args) = @_;
     my $self = bless {
-        maker => SQL::Maker->new(driver => 'SQLite'),
+        maker => SQL::Maker->new(driver => 'SQLite', strict => 1),
         in_memory_dbh => undef,
     }, $class;
     $self->set_param(\%args, "path", undef, 1);
@@ -122,9 +122,9 @@ sub _record_hash_to_array {
 sub _put_update {
     my ($self, $dbh, $record, $prev_sth) = @_;
     my $sth = $prev_sth;
-    my ($sql, @bind) = $self->{maker}->update('statuses', _record_hash_to_array($record), [
-        'timeline_id' => "$record->{timeline_id}", status_id => "$record->{status_id}"
-    ]);
+    my ($sql, @bind) = $self->{maker}->update('statuses', _record_hash_to_array($record), sql_and([
+        sql_eq('timeline_id' => $record->{timeline_id}), sql_eq(status_id => $record->{status_id})
+    ]));
     if(!$sth) {
         ## Or, should we check $sql is not changed...?
         $sth = $dbh->prepare($sql);
@@ -217,7 +217,7 @@ sub put_statuses {
 
 sub _get_timeline_id {
     my ($self, $dbh, $timeline_name) = @_;
-    my ($sql, @bind) = $self->{maker}->select('timelines', ['timeline_id'], ['name' => "$timeline_name"]);
+    my ($sql, @bind) = $self->{maker}->select('timelines', ['timeline_id'], sql_eq(name => $timeline_name));
     my $record = $dbh->selectrow_arrayref($sql, undef, @bind);
     if(!defined($record)) {
         return undef;
@@ -317,11 +317,11 @@ sub get_statuses {
             if(!defined($max_id_cond)) {
                 return (undef, []);
             }
-            $cond = ($cond & $max_id_cond);
+            $cond = sql_and([$cond, $max_id_cond]);
         }
         my %maker_opt = (order_by => \@STATUSES_ORDER_BY);
         if($count ne 'all') {
-            $maker_opt{limit} = $count;
+            $maker_opt{limit} = "$count";
         }
         my ($sql, @bind) = $self->{maker}->select("statuses", ['*'], $cond, \%maker_opt);
         my $sth = $dbh->prepare($sql);
@@ -342,12 +342,11 @@ sub get_statuses {
 sub _create_base_condition {
     my ($self, $timeline_id, $ack_state) = @_;
     $ack_state ||= 'any';
-    my $cond = $self->{maker}->new_condition();
-    $cond->add(timeline_id => $timeline_id);
+    my $cond = sql_eq(timeline_id => $timeline_id);
     if($ack_state eq 'acked') {
-        $cond->add('utc_acked_at', {'!=' => $UNDEF_TIMESTAMP});
+        $cond = sql_and([$cond, sql_ne(utc_acked_at => $UNDEF_TIMESTAMP)]);
     }elsif($ack_state eq 'unacked') {
-        $cond->add('utc_acked_at' => $UNDEF_TIMESTAMP);
+        $cond = sql_and([$cond, sql_eq(utc_acked_at => $UNDEF_TIMESTAMP)]);
     }
     return $cond;
 }
@@ -355,7 +354,7 @@ sub _create_base_condition {
 sub _get_timestamps_of {
     my ($self, $dbh, $timeline_id, $status_id, $ack_state) = @_;
     my $cond = $self->_create_base_condition($timeline_id, $ack_state);
-    $cond->add(status_id => "$status_id");
+    $cond = sql_and([$cond, sql_eq(status_id => $status_id)]);
     my ($sql, @bind) = $self->{maker}->select("statuses", ['utc_acked_at', 'utc_created_at'], $cond, {
         limit => 1
     });
@@ -377,9 +376,19 @@ sub _create_max_id_condition {
 
 sub _create_max_time_condition {
     my ($self, $max_acked_at, $max_created_at, $max_id) = @_;
-    my $cond = $self->{maker}->new_condition();
-    $cond->add_raw(q{utc_acked_at < ? OR ( utc_acked_at = ? AND ( utc_created_at < ? OR ( utc_created_at = ? AND status_id <= ?)))},
-                   [($max_acked_at) x 2, ($max_created_at) x 2, "$max_id"]);
+    my $cond = sql_or([
+        sql_lt(utc_acked_at => $max_acked_at),
+        sql_and([
+            sql_eq(utc_acked_at => $max_acked_at),
+            sql_or([
+                sql_lt(utc_created_at => $max_created_at),
+                sql_and([
+                    sql_eq(utc_created_at => $max_created_at),
+                    sql_le(status_id => $max_id),
+                ])
+            ])
+        ])
+    ]);
     return $cond;
 }
 
@@ -438,7 +447,7 @@ sub _ack_all {
     my ($self, $dbh, $timeline_id, $ack_utc_timestamp) = @_;
     my ($sql, @bind) = $self->{maker}->update(
         'statuses', [utc_acked_at => $ack_utc_timestamp],
-        [timeline_id => $timeline_id, utc_acked_at => $UNDEF_TIMESTAMP]
+        sql_and([sql_eq(timeline_id => $timeline_id), sql_eq(utc_acked_at => $UNDEF_TIMESTAMP)]),
     );
     return $dbh->do($sql, undef, @bind);
 }
@@ -451,7 +460,7 @@ sub _ack_max_id {
     }
     my $cond = $self->_create_base_condition($timeline_id, 'unacked');
     my ($sql, @bind) = $self->{maker}->update(
-        'statuses', [utc_acked_at => $ack_utc_timestamp], ($cond & $max_id_cond)
+        'statuses', [utc_acked_at => $ack_utc_timestamp], sql_and([$cond, $max_id_cond])
     );
     return $dbh->do($sql, undef, @bind);
 }
@@ -465,7 +474,7 @@ sub _ack_ids {
     my $sth;
     foreach my $id (@$ids) {
         my $cond = $self->_create_base_condition($timeline_id, 'unacked');
-        $cond->add(status_id => "$id");
+        $cond = sql_and([$cond, sql_eq(status_id => $id)]);
         my ($sql, @bind) = $self->{maker}->update(
             'statuses', [utc_acked_at => $ack_utc_timestamp], $cond
         );
@@ -528,13 +537,9 @@ sub delete_statuses {
 
 sub _delete_timeline {
     my ($self, $dbh, $timeline_id) = @_;
-    my ($sql, @bind) = $self->{maker}->delete('statuses', [
-        timeline_id => $timeline_id
-    ]);
+    my ($sql, @bind) = $self->{maker}->delete('statuses', sql_eq(timeline_id => $timeline_id));
     my $status_count = $dbh->do($sql, undef, @bind);
-    ($sql, @bind) = $self->{maker}->delete('timelines', [
-        timeline_id => $timeline_id
-    ]);
+    ($sql, @bind) = $self->{maker}->delete('timelines', sql_eq(timeline_id => $timeline_id));
     $dbh->do($sql, undef, @bind);
     return $status_count;
 }
@@ -545,9 +550,9 @@ sub _delete_ids {
     my $sth;
     my $total_count = 0;
     foreach my $id (@$ids) {
-        my ($sql, @bind) = $self->{maker}->delete('statuses', [
-            timeline_id => $timeline_id, status_id => "$id"
-        ]);
+        my ($sql, @bind) = $self->{maker}->delete('statuses', sql_and([
+            sql_eq(timeline_id => $timeline_id), sql_eq(status_id => $id)
+        ]));
         if(!$sth) {
             $sth = $dbh->prepare($sql);
         }
@@ -562,7 +567,7 @@ sub _delete_ids {
 sub _delete_exceeding_statuses {
     my ($self, $dbh, $timeline_id) = @_;
     ## get total count in the timeline
-    my ($sql, @bind) = $self->{maker}->select('statuses', [\'count(*)'], [timeline_id => $timeline_id]);
+    my ($sql, @bind) = $self->{maker}->select('statuses', [\'count(*)'], sql_eq(timeline_id => $timeline_id));
     my $row = $dbh->selectrow_arrayref($sql, undef, @bind);
     if(!defined($row)) {
         die "count query for timeline $timeline_id returns undef. something is wrong.";
@@ -574,7 +579,7 @@ sub _delete_exceeding_statuses {
     }
 
     ## get the top of the exceeding statuses
-    ($sql, @bind) = $self->{maker}->select('statuses', [qw(utc_acked_at utc_created_at status_id)], [timeline_id => $timeline_id], {
+    ($sql, @bind) = $self->{maker}->select('statuses', [qw(utc_acked_at utc_created_at status_id)], sql_eq(timeline_id => $timeline_id), {
         order_by => \@STATUSES_ORDER_BY,
         offset => $self->{max_status_num},
         limit => 1,
@@ -586,9 +591,8 @@ sub _delete_exceeding_statuses {
     my $time_cond = $self->_create_max_time_condition(@$row);
 
     ## execute deletion
-    my $timeline_cond = $self->{maker}->new_condition();
-    $timeline_cond->add(timeline_id => $timeline_id);
-    ($sql, @bind) = $self->{maker}->delete('statuses', ($timeline_cond & $time_cond));
+    my $timeline_cond = sql_eq(timeline_id => $timeline_id);
+    ($sql, @bind) = $self->{maker}->delete('statuses', sql_and([$timeline_cond, $time_cond]));
     return $dbh->do($sql, undef, @bind);
 }
 
@@ -629,12 +633,13 @@ sub _add_to_delete_count {
     my ($self, $dbh, $add_count) = @_;
     return if $self->{vacuum_on_delete} <= 0;
     return if $add_count <= 0;
-    my ($sql, @bind) = $self->{maker}->update('delete_counts', [
-        delete_count => \ ['delete_count + ?', $add_count]  ## trick to insert unquoted value
-    ], [delete_count_id => $DELETE_COUNT_ID]);
+    my ($sql, @bind) = $self->{maker}->update(
+        'delete_counts',
+        [delete_count => sql_raw('delete_count + ?', $add_count)],
+        sql_eq(delete_count_id => $DELETE_COUNT_ID));
     $dbh->do($sql, undef, @bind);
     
-    ($sql, @bind) = $self->{maker}->select('delete_counts', ["delete_count"], [delete_count_id => $DELETE_COUNT_ID]);
+    ($sql, @bind) = $self->{maker}->select('delete_counts', ["delete_count"], sql_eq(delete_count_id => $DELETE_COUNT_ID));
     my $row = $dbh->selectrow_arrayref($sql, undef, @bind);
     if(!defined($row)) {
         die "no delete_counts row with delete_count_id = $DELETE_COUNT_ID. something is wrong.";
@@ -648,7 +653,7 @@ sub _add_to_delete_count {
 
 sub _do_vacuum {
     my ($self, $dbh) = @_;
-    my ($sql, @bind) = $self->{maker}->update('delete_counts', [delete_count => 0], [delete_count_id => $DELETE_COUNT_ID]);
+    my ($sql, @bind) = $self->{maker}->update('delete_counts', [delete_count => 0], sql_eq(delete_count_id => $DELETE_COUNT_ID));
     $dbh->do($sql, undef, @bind);
     $dbh->do('VACUUM');
 }
@@ -656,6 +661,78 @@ sub _do_vacuum {
 sub vacuum {
     my ($self) = @_;
     $self->_do_vacuum($self->_get_my_dbh());
+}
+
+sub contains {
+    my ($self, %args) = @_;
+    my $timeline = $args{timeline};
+    croak 'timeline parameter is mandatory' if not defined $timeline;
+    my $callback = $args{callback};
+    croak 'callback parameter is mandatory' if not defined $callback;
+    my $query = $args{query};
+    croak 'query parameter is mandatory' if not defined $query;
+    my $ref_query = ref($query);
+    if(!$ref_query || $ref_query eq 'HASH') {
+        $query = [$query];
+    }elsif($ref_query eq 'ARRAY') {
+        ;
+    }else {
+        croak 'query parameter must be either a status, status ID or array-ref';
+    }
+    foreach my $query_elem (@$query) {
+        croak "query element must be defined" if not defined $query_elem;
+        if(ref($query_elem) eq 'HASH' && !defined($query_elem->{id})) {
+            croak "id field must be set in query statuses";
+        }
+    }
+    my @method_result = try {
+        my $dbh = $self->_get_my_dbh();
+        my $timeline_id = $self->_get_timeline_id($dbh, $timeline);
+        my @ret_contained = ();
+        my @ret_not_contained = ();
+        if(!defined($timeline_id)) {
+            @ret_not_contained = @$query;
+            return (undef, \@ret_contained, \@ret_not_contained);
+        }
+        my $sth;
+        foreach my $query_elem (@$query) {
+            my $status_id = (ref($query_elem) eq 'HASH') ? $query_elem->{id} : $query_elem;
+            my ($sql, @bind) = $self->{maker}->select(
+                'statuses', ['timeline_id', 'status_id'],
+                sql_and([sql_eq(timeline_id => $timeline_id), sql_eq(status_id => $status_id)])
+            );
+            if(!$sth) {
+                $sth = $dbh->prepare($sql);
+            }
+            $sth->execute(@bind);
+            my $result = $sth->fetchall_arrayref();
+            if(!defined($result)) {
+                confess "Statement handle is inactive. Something is wrong.";
+            }
+            if(@$result) {
+                push @ret_contained, $query_elem;
+            }else {
+                push @ret_not_contained, $query_elem;
+            }
+        }
+        return (undef, \@ret_contained, \@ret_not_contained);
+    }catch {
+        my $e = shift;
+        return ($e);
+    };
+    @_ = @method_result;
+    goto $callback;
+}
+
+sub get_timeline_names {
+    my ($self) = @_;
+    my $dbh = $self->_get_my_dbh();
+    my ($sql, @bind) = $self->{maker}->select(
+        'timelines', ['name']
+    );
+    my $result = $dbh->selectall_arrayref($sql, undef, @bind);
+    my @return = map { $_->[0] } @$result;
+    return @return;
 }
 
 1;
@@ -734,6 +811,10 @@ In addition to it, it has the following methods.
 =head2 $storage->vacuum()
 
 Executes SQL C<VACUUM> on the database.
+
+=head2 @timeline_names = $storage->get_timeline_names()
+
+Returns all timeline names in the C<$storage>.
 
 
 =head1 AUTHOR
