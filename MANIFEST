@@ -69,6 +69,7 @@ t/testlib/StatusStorage/AEDelayed.pm
 t/testlib/Timeline_Util.pm
 t/Timeline.t
 t/Util_future.t
+t/Util_make_tracking.t
 t/Util_sort_statuses.t
 t/Util_split.t
 t/WebAPI.t
