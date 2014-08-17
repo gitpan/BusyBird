@@ -15,7 +15,6 @@ build_requires:
   HTML::TreeBuilder::XPath: '0.12'
   HTTP::Request: '6.00'
   JSON: '0'
-  Module::Build::Pluggable::CPANfile: '0.05'
   Plack::Test: '0'
   Test::Builder: '0'
   Test::Exception: '0.31'
@@ -26,8 +25,7 @@ build_requires:
   Test::Warn: '0.24'
 configure_requires:
   Module::Build: '0.42'
-  Module::Build::Pluggable: '0.09'
-  Module::Build::Pluggable::CPANfile: '0.05'
+  Module::Build::Prereqs::FromCPANfile: '0.02'
 dynamic_config: 1
 generated_by: 'Module::Build version 0.4205, CPAN::Meta::Converter version 2.141170'
 license: perl
@@ -98,4 +96,4 @@ requires:
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
   repository: git://github.com/debug-ito/busybird.git
-version: '0.06'
+version: '0.07'
