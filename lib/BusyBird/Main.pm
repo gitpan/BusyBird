@@ -12,6 +12,7 @@ use Scalar::Util qw(looks_like_number);
 use File::ShareDir;
 use URI::Escape qw(uri_escape);
 use Encode ();
+use Try::Tiny;
 
 our @CARP_NOT = ('BusyBird::Timeline');
 
@@ -65,8 +66,33 @@ my %DEFAULT_CONFIG_GENERATOR = (
         return qq{https://twitter.com/search?q=$query_hashtag&src=hash};
     }},
     hashtags_entity_text_builder => sub { sub { my $text = shift; return $text }},
+    
     timeline_web_notifications => sub { 'simple' },
     hidden => sub { 0 },
+
+    attached_image_urls_builder => sub {
+        no autovivification;
+        my $get_media_urls = sub {
+            my ($entities_obj) = @_;
+            return try {
+                grep { defined($_) } map {
+                    $_->{media_url}
+                } @{$entities_obj->{media}};
+            }catch {
+                ()
+            };
+        };
+        return sub {
+            my ($status) = @_;
+            tie my %url_set, "Tie::IxHash";
+            foreach my $url (map { $get_media_urls->($status->{$_}) } qw(entities extended_entities)) {
+                $url_set{$url} = 1;
+            }
+            return keys %url_set;
+        };
+    },
+    attached_image_max_height => sub { 360 },
+    attached_image_show_default => sub { "hidden" },
 
     timeline_list_pager_entry_max => sub { 7 },
     timeline_list_per_page => sub { 30 },
@@ -153,17 +179,11 @@ sub get_timeline_config {
 }
 
 sub watch_unacked_counts {
-    ## my ($self, $level, $watch_spec, $callback) = @_;
     my ($self, %watch_args) = @_;
     my $level = $watch_args{level};
     $level = 'total' if not defined $level;
     my $assumed = $watch_args{assumed};
     my $callback = $watch_args{callback};
-    ## if(looks_like_number($level)) {
-    ##     croak "level must be an integer or 'total'" if int($level) != $level;
-    ## }else {
-    ##     croak "level must be an integer or 'total'" if $level ne 'total';
-    ## }
     if(!defined($assumed) || ref($assumed) ne 'HASH') {
         croak 'assumed must be a hash-ref';
     }

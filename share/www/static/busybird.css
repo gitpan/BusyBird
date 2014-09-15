@@ -20,24 +20,33 @@ ul#statuses li{
     border-color: black;
     border-style: solid;
     margin: 2px 0;
-    padding: 3px 0 3px 3px;
+    padding: 0;
     list-style-type: none;
-    overflow: hidden;
+}
+
+ul#statuses li.bb-hidden-statuses-header {
+    padding: 0 3px;
 }
 
 .bb-status-id {
     display: none;
 }
 
+div.bb-status-columns-container {
+    overflow: hidden;
+    padding: 3px 0 5px 0;
+}
+
 div.bb-status-profile-image {
     float: left;
     text-align: center;
     width: 48px;
+    padding: 0 0 0 0;
 }
 
 div.bb-status-main {
     margin-left: 54px;
-    padding-bottom: 8px;
+    padding: 0 0 0 0;
 }
 
 div.bb-status-header {
@@ -45,6 +54,7 @@ div.bb-status-header {
     border-color: #999;
     border-style: solid;
     padding: 0 3px 3px 3px;
+    overflow: hidden;
 }
 
 div.bb-status-text {
@@ -61,10 +71,6 @@ div.bb-status-attributes {
     padding: 0 8px 0 12px;
 }
 
-.bb-status-retweeted-by i {
-    vertical-align: middle;
-}
-
 .bb-status-username {
     font-weight: bold;
     padding: 2px 0 3px 0;
@@ -76,6 +82,48 @@ div.bb-status-attributes {
 
 .bb-status-cursor {
     background-color: #e7e8ec;
+}
+
+.bb-status-extension-container {
+    padding: 0 0 5px 0;
+}
+
+.bb-status-extension-toggler {
+    cursor: pointer;
+}
+
+.bb-status-extension-toggler:hover {
+    background-color: #f4f5f9;
+}
+
+.bb-status-extension-pane {
+    padding: 5px 0 0 0;
+    border-width: 1px 0 0 0;
+    border-color: #444;
+    border-style: dashed;
+}
+
+.bb-status-extension-pane img {
+    max-width: 100%;
+    border-width: 2px;
+    border-style: solid;
+    border-color: transparent;
+}
+
+.bb-status-extension-handle {
+    padding: 5px 0 0 3px;
+    line-height: 1;
+    font-size: 90%;
+}
+
+.bb-status-extension-handle button {
+    font-weight: normal;
+    background-color: transparent;
+    line-height: 1;
+    border-width: 0;
+    padding: 0;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .bb-summary-heading {

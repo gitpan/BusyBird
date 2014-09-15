@@ -96,4 +96,4 @@ requires:
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
   repository: git://github.com/debug-ito/busybird.git
-version: '0.07'
+version: '0.08'

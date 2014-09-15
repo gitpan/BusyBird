@@ -6,6 +6,7 @@
 bb.StatusContainer = (function() { var selfclass = $.extend(function(args) {
     // @params: args.selectorContainer, args.timeline, args.apiBase = ""
     var self = this;
+    var now_toggling_extension = false;
     if(!defined(args.selectorContainer)) {
         throw "selectorContainer param is mandatory";
     }
@@ -18,8 +19,17 @@ bb.StatusContainer = (function() { var selfclass = $.extend(function(args) {
     self.threshold_level = 0;
     self.$cursor = null;
     self.on_threshold_level_changed_callbacks = [];
+    
     $(self.sel_container).on("click", ".bb-status", function() {
         self.setCursor(this);
+    });
+    $(self.sel_container).on("click", ".bb-status-extension-toggler", function(event) {
+        if(!now_toggling_extension && $(event.target).closest("a").size() === 0) {
+            now_toggling_extension = true;
+            self.toggleExtensionPane(this).fin(function() {
+                now_toggling_extension = false;
+            });
+        }
     });
 }, {
     ADD_STATUSES_BLOCK_SIZE: 100,
@@ -71,7 +81,7 @@ bb.StatusContainer = (function() { var selfclass = $.extend(function(args) {
             hiddenHeaderList: [],
             domsAnimateToggle: [],
             domsImmediateToggle: [],
-            domAnchorElem: null,
+            domAnchorElem: null
         };
         var metrics_list = [];
         var next_seq_invisible_entries = [];
@@ -457,6 +467,49 @@ bb.StatusContainer = (function() { var selfclass = $.extend(function(args) {
     listenOnThresholdLevelChanged: function(callback) {
         // @params: callback (function(new_threshold) returning anything)
         this.on_threshold_level_changed_callbacks.push(callback);
+    },
+    _getWindowAdjusterForExtensionPane: function($pane) {
+        // @return: a window adjuster function that keeps the closing
+        // extension pane near the center of the screen as mush as
+        // possible.
+        var self = this;
+        var pane_init_height = $pane.height();
+        if(pane_init_height <= 0) {
+            return null;
+        }
+        var screen_center = $(window).scrollTop() + $(window).height() * 0.4; // a little above the center, actually
+        var pos_ratio = (screen_center - $pane.offset().top) / pane_init_height;
+        if(pos_ratio <= 0) {
+            return null;
+        }
+        if(pos_ratio > 1) {
+            pos_ratio = 1;
+        }
+        return selfclass._createWindowAdjuster(function() {
+            return $pane.offset().top + pos_ratio * $pane.height();
+        });
+    },
+    toggleExtensionPane: function(extension_container_dom) {
+        // @returns: promise that resolves when it finishes toggling.
+        var self = this;
+        var $container = $(extension_container_dom);
+        var $pane = $container.find(".bb-status-extension-pane");
+        var $icon_expander = $container.find(".bb-status-extension-expander");
+        var $icon_collapser = $container.find(".bb-status-extension-collapser");
+        var $anchor = null;
+        var window_adjuster = null;
+        if($pane.size() === 0) {
+            return;
+        }
+        if($pane.css("display") === "none") {
+            $icon_expander.hide();
+            $icon_collapser.show();
+        }else {
+            window_adjuster = self._getWindowAdjusterForExtensionPane($pane);
+            $icon_expander.show();
+            $icon_collapser.hide();
+        }
+        return bb.slideToggleElements($pane, selfclass.ANIMATE_STATUS_DURATION, window_adjuster);
     },
 }; return selfclass;})();
 

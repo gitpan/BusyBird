@@ -203,7 +203,12 @@ sub template_functions_for_timeline {
                 };
             }
             return $result_text;
-        }
+        },
+        bb_attached_image_urls => sub {
+            my ($status) = @_;
+            my $urls_builder = $self->{main_obj}->get_timeline_config($timeline_name, "attached_image_urls_builder");
+            return [grep { _is_valid_link_url($_) } $urls_builder->($status)];
+        },
     };
 }
 
@@ -251,7 +256,8 @@ sub _format_status_html_destructive {
     }
     return $self->{renderer}->render(
         "status.tx",
-        {s => $status, %{$self->template_functions_for_timeline($timeline_name)}}
+        {s => $status,
+         %{$self->template_functions_for_timeline($timeline_name)}}
     );
 }
 
@@ -320,8 +326,11 @@ sub response_timeline {
         args => {
             timeline_name => $timeline_name,
             script_name => $script_name,
-            post_button_url => $self->{main_obj}->get_timeline_config($timeline_name, "post_button_url"),
             timeline_config_json => $self->_create_timeline_config_json($timeline_name),
+            post_button_url => $self->{main_obj}->get_timeline_config($timeline_name, "post_button_url"),
+            attached_image_max_height => $self->{main_obj}->get_timeline_config($timeline_name, "attached_image_max_height"),
+            attached_image_show_default_bool =>
+            ($self->{main_obj}->get_timeline_config($timeline_name, "attached_image_show_default") eq "visible")
         }
     );
 }
@@ -564,6 +573,13 @@ Returns the permalink URL for the status.
 =item C<bb_text> => CODEREF($status)
 
 Returns the HTML text for the status.
+
+=item C<bb_attached_image_urls> => CODEREF($status)
+
+Returns an array-ref of image URLs attached to the C<$status>.
+These images are rendered together with the status text.
+
+If C<$status> doesn't have any attached images, it returns an empty array-ref.
 
 =back
 

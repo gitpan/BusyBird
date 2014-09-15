@@ -61,9 +61,11 @@ t/Log.t
 t/Main.t
 t/Main_PSGI.t
 t/Main_PSGI_View.t
+t/Main_PSGI_View_config.t
 t/StatusStorage_Memory.t
 t/StatusStorage_SQLite.t
 t/testlib/HTTP.pm
+t/testlib/Main_Util.pm
 t/testlib/StatusHTML.pm
 t/testlib/StatusStorage/AEDelayed.pm
 t/testlib/Timeline_Util.pm

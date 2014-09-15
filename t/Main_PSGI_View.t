@@ -10,6 +10,7 @@ use utf8;
 use Encode qw(encode_utf8);
 use lib "t";
 use testlib::HTTP;
+use testlib::Main_Util;
 
 BEGIN {
     use_ok("BusyBird::Main::PSGI::View");
@@ -35,10 +36,7 @@ sub test_json_response {
 }
 
 sub create_main {
-    my $main = BusyBird::Main->new;
-    $main->set_config(
-        default_status_storage => BusyBird::StatusStorage::SQLite->new(path => ':memory:')
-    );
+    my $main = testlib::Main_Util::create_main();
     $main->timeline('test');
     return $main;
 }
@@ -139,6 +137,16 @@ sub create_main {
          exp => ''},
     ) {
         is($funcs->{image}->(@{$case->{args}}), $case->{exp}, "$case->{label} OK");
+    }
+
+    note("--- -- link to image");
+    foreach my $case (
+        {label => "valid url", url => 'http://hoge.com/img.png',
+         exp => '<a href="http://hoge.com/img.png"><img src="http://hoge.com/img.png" /></a>'},
+        {label => "invalid url", url => 'javascript: return false;',
+         exp => ''}
+    ) {
+        is($funcs->{link}($funcs->{image}(src => $case->{url}), href => $case->{url}), $case->{exp}, "$case->{label}: OK");
     }
 
     note("--- -- bb_level");
@@ -299,6 +307,47 @@ sub create_main {
          exp => q{ドコモ「docomo Wi-Fi」、南海/阪急/JR 九州でサービス エリア拡大 <a href="http://t.co/mvgqG5v3mQ" target="_blank">bit.ly/14jappE</a> <a href="https://twitter.com/search?q=%23%E5%8D%97%E6%B5%B7&src=hash" target="_blank">#南海</a> <a href="https://twitter.com/search?q=%23%E9%98%AA%E6%80%A5&src=hash" target="_blank">#阪急</a> <a href="https://twitter.com/search?q=%23JR%E4%B9%9D%E5%B7%9E&src=hash" target="_blank">#JR九州</a> <a href="http://t.co/U3h7lEDZKT" target="_blank">pic.twitter.com/U3h7lEDZKT</a>}}
     ) {
         is($funcs->{bb_text}->(@{$case->{args}}), $case->{exp}, "$case->{label}: OK");
+    }
+
+    note("-- bb_attached_image_urls");
+    foreach my $case (
+        {label => "no entities at all", args => [{text => "hogehoge"}], exp => []},
+        {label => "media entities",
+         args => [{
+             text => "foobar",
+             entities => { media => [
+                 { media_url => "http://example.com/media1.png" },
+                 { media_url => "http://example.com/media2.png" }
+             ] }
+         }],
+         exp => ["http://example.com/media1.png", "http://example.com/media2.png"]},
+        {label => "mixed entities and extended_entities. URLs in entities are rendered first.",
+         args => [{
+             text => "FOO",
+             entities => { media => [
+                 {media_url => "http://example.com/media1.png"},
+                 {media_url => "http://example.com/media2.png"},
+             ] },
+             extended_entities => { media => [
+                 {media_url => "http://example.com/media3.png"},
+                 {media_url => "http://example.com/media2.png"},
+                 {media_url => "http://example.com/media1.png"},
+             ] }
+         }],
+         exp => [map { "http://example.com/media$_.png" } (1, 2, 3)]},
+        {label => "invalid input for media URLs",
+         args => [{
+             text => "hoge",
+             entities => { media => [
+                 {media_url => "javascript: alert('boom!')"},
+                 {media_url => 100},
+                 {},
+                 {media_url => 'http://this.is.ok.com/hoge.png'}
+             ] }
+         }],
+         exp => ["http://this.is.ok.com/hoge.png"]}
+    ) {
+        is_deeply $funcs->{bb_attached_image_urls}(@{$case->{args}}), $case->{exp}, "$case->{label}: OK";
     }
 }
 
