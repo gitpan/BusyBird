@@ -12,6 +12,8 @@ use Encode ();
 use JavaScript::Value::Escape ();
 use DateTime::TimeZone;
 use BusyBird::DateTime::Format;
+use BusyBird::Log qw(bblog);
+use BusyBird::SafeData qw(safed);
 use Cache::Memory::Simple;
 use Plack::Util ();
 use Tie::IxHash;
@@ -23,6 +25,7 @@ sub new {
         renderer => undef,
     }, $class;
     $self->set_param(\%args, "main_obj", undef, 1);
+    $self->set_param(\%args, "script_name", undef, 1);
     my $sharedir = $self->{main_obj}->get_config('sharedir_path');
     $sharedir =~ s{/+$}{};
     $self->{renderer} = Text::Xslate->new(
@@ -30,7 +33,12 @@ sub new {
         cache_dir => File::Spec->tmpdir,
         syntax => 'Kolon',
         function => $self->template_functions(),
-        ## warn_handler => sub { ... },
+        warn_handler => sub {
+            bblog("warn", @_);
+        },
+        ## we don't use die_handler because (1) it is called for every
+        ## death even when it's in eval() scope, (2) exceptions are
+        ## caught by Xslate and passed to warn_handler anyway.
     );
     return $self;
 }
@@ -141,7 +149,17 @@ sub _html_link_status_text {
     return _html_link($text, href => $url, target => "_blank");
 }
 
+sub _make_path {
+    my ($script_name, $given_path) = @_;
+    if(substr($given_path, 0, 1) eq "/") {
+        return "$script_name$given_path";
+    }else {
+        return $given_path;
+    }
+}
+
 sub template_functions {
+    my $script_name = $_[0]->{script_name};
     return {
         js => \&JavaScript::Value::Escape::js,
         link => html_builder(\&_html_link),
@@ -159,7 +177,22 @@ sub template_functions {
             $level = 0 if not defined $level;
             return $level;
         },
+        path => sub { _make_path($script_name, $_[0]) },
+        script_name => sub { $script_name },
     };
+}
+
+sub _render_text_segment {
+    my ($self, $timeline_name, $segment, $status) = @_;
+    return undef if !defined($segment->{entity}) || !defined($segment->{type});
+    my $url_builder = $self->{main_obj}->get_timeline_config($timeline_name, "$segment->{type}_entity_url_builder");
+    my $text_builder = $self->{main_obj}->get_timeline_config($timeline_name, "$segment->{type}_entity_text_builder");
+    return undef if !defined($url_builder) || !defined($text_builder);
+    my $url_str = $url_builder->($segment->{text}, $segment->{entity}, $status);
+    return undef if !_is_valid_link_url($url_str);
+    my $text_str = $text_builder->($segment->{text}, $segment->{entity}, $status);
+    $text_str = "" if not defined $text_str;
+    return _html_link_status_text($text_str, $url_str);
 }
 
 sub template_functions_for_timeline {
@@ -179,7 +212,13 @@ sub template_functions_for_timeline {
         bb_status_permalink => sub {
             my ($status) = @_;
             my $builder = $self->{main_obj}->get_timeline_config($timeline_name, "status_permalink_builder");
-            my $url = $builder->($status);
+            my $url = try {
+                $builder->($status);
+            }catch {
+                my ($e) = @_;
+                bblog("error", "Error in status_permalink_builder: $e");
+                undef;
+            };
             return (_is_valid_link_url($url) ? $url : "");
         },
         bb_text => html_builder {
@@ -188,26 +227,28 @@ sub template_functions_for_timeline {
             my $segments_ref = split_with_entities($status->{text}, $status->{entities});
             my $result_text = "";
             foreach my $segment (@$segments_ref) {
-                $result_text .= try {
-                    die "no entity" if not defined $segment->{entity};
-                    my $url_builder = $self->{main_obj}->get_timeline_config($timeline_name, "$segment->{type}_entity_url_builder");
-                    my $text_builder = $self->{main_obj}->get_timeline_config($timeline_name, "$segment->{type}_entity_text_builder");
-                    die "no builder" if !defined($url_builder) || !defined($text_builder);
-                    my $url_str = $url_builder->($segment->{text}, $segment->{entity}, $status);
-                    die "invalid URL" if !_is_valid_link_url($url_str);
-                    my $text_str = $text_builder->($segment->{text}, $segment->{entity}, $status);
-                    $text_str = "" if not defined $text_str;
-                    return _html_link_status_text($text_str, $url_str);
+                my $rendered_text = try {
+                    $self->_render_text_segment($timeline_name, $segment, $status)
                 }catch {
-                    return _escape_and_linkify_status_text($segment->{text});
+                    my ($e) = @_;
+                    bblog("error", "Error while rendering text: $e");
+                    undef;
                 };
+                $result_text .= defined($rendered_text) ? $rendered_text : _escape_and_linkify_status_text($segment->{text});
             }
             return $result_text;
         },
         bb_attached_image_urls => sub {
             my ($status) = @_;
             my $urls_builder = $self->{main_obj}->get_timeline_config($timeline_name, "attached_image_urls_builder");
-            return [grep { _is_valid_link_url($_) } $urls_builder->($status)];
+            my @image_urls = try {
+                $urls_builder->($status);
+            }catch {
+                my ($e) = @_;
+                bblog("error", "Error in attached_image_urls_builder: $e");
+                ();
+            };
+            return [grep { _is_valid_link_url($_) } @image_urls ];
         },
     };
 }
@@ -247,7 +288,7 @@ sub _escape_and_linkify_status_text {
 sub _format_status_html_destructive {
     my ($self, $status, $timeline_name) = @_;
     $timeline_name = "" if not defined $timeline_name;
-    if(defined($status->{retweeted_status}) && ref($status->{retweeted_status}) eq "HASH") {
+    if(ref($status->{retweeted_status}) eq "HASH" && (!defined($status->{busybird}) || ref($status->{busybird}) eq 'HASH')) {
         my $retweet = $status->{retweeted_status};
         $status->{busybird}{retweeted_by_user} = $status->{user};
         foreach my $key (qw(text created_at user entities)) {
@@ -256,7 +297,7 @@ sub _format_status_html_destructive {
     }
     return $self->{renderer}->render(
         "status.tx",
-        {s => $status,
+        {ss => safed($status),
          %{$self->template_functions_for_timeline($timeline_name)}}
     );
 }
@@ -317,7 +358,7 @@ sub _create_timeline_config_json {
 }
 
 sub response_timeline {
-    my ($self, $timeline_name, $script_name) = @_;
+    my ($self, $timeline_name) = @_;
     my $timeline = $self->{main_obj}->get_timeline($timeline_name);
     return $self->response_notfound("Cannot find $timeline_name") if not defined($timeline);
     
@@ -325,7 +366,6 @@ sub response_timeline {
         template => "timeline.tx",
         args => {
             timeline_name => $timeline_name,
-            script_name => $script_name,
             timeline_config_json => $self->_create_timeline_config_json($timeline_name),
             post_button_url => $self->{main_obj}->get_timeline_config($timeline_name, "post_button_url"),
             attached_image_max_height => $self->{main_obj}->get_timeline_config($timeline_name, "attached_image_max_height"),
@@ -337,13 +377,13 @@ sub response_timeline {
 
 sub response_timeline_list {
     my ($self, %args) = @_;
-    foreach my $key (qw(script_name timeline_unacked_counts total_page_num cur_page)) {
+    foreach my $key (qw(timeline_unacked_counts total_page_num cur_page)) {
         croak "$key parameter is mandatory" if not defined $args{$key};
     }
     croak "timeline_unacked_counts must be an array-ref" if ref($args{timeline_unacked_counts}) ne "ARRAY";
     
     my %input_args = (last_page => $args{total_page_num} - 1);
-    foreach my $input_key (qw(script_name cur_page)) {
+    foreach my $input_key (qw(cur_page)) {
         $input_args{$input_key} = $args{$input_key};
     }
     
@@ -360,6 +400,10 @@ sub response_timeline_list {
         : $args{cur_page} >= ($args{total_page_num} - $right_margin)
                                                     ? [($args{total_page_num} - $pager_entry_max) .. ($args{total_page_num} - 1)]
                                                     : [($args{cur_page} - $left_margin) .. ($args{cur_page} + $right_margin - 1)];
+    $input_args{page_path} = sub {
+        my ($page) = @_;
+        return _make_path($self->{script_name}, "/?page=$page");
+    };
     return $self->_response_template(
         template => "timeline_list.tx",
         args => \%input_args,
@@ -384,6 +428,7 @@ B<< This module is rather for internal use.
 End-users should not use this module directly.
 Specification in this document may be changed in the future. >>
 
+This module uses L<BusyBird::Log> for logging.
 
 =head1 CLASS METHODS
 
@@ -396,6 +441,10 @@ Fields in C<%args> are:
 =over
 
 =item C<main_obj> => L<BusyBird::Main> OBJECT (mandatory)
+
+=item C<script_name> => STRING (mandatory)
+
+The URL path to the application root. This must be what you get as C<SCRIPT_NAME> in a L<PSGI> environment object.
 
 =back
 
@@ -470,15 +519,13 @@ A string of timeline name for the statuses.
 
 =back
 
-=head2 $psgi_response = $view->response_timeline($timeline_name, $script_name)
+=head2 $psgi_response = $view->response_timeline($timeline_name)
 
 Returns a L<PSGI> response object of the top view for a timeline.
 
 C<$timeline_name> is a string of timeline name to be rendered.
 If the timeline does not exist in C<$view>'s L<BusyBird::Main> object, it returns "404 Not Found" response.
 
-C<$script_name> is the base path for internal hyperlinks.
-It should be C<SCRIPT_NAME> of the L<PSGI> environment.
 
 =head2 $psgi_response = $view->response_timeline_list(%args)
 
@@ -487,10 +534,6 @@ Returns a L<PSGI> response object of the view of timeline list.
 Fields in C<%args> are:
 
 =over
-
-=item C<script_name> => STR (mandatory)
-
-The base path for internal hyperlinks known as C<SCRIPT_NAME>.
 
 =item C<timeline_unacked_counts> => ARRAYREF (mandatory)
 
@@ -542,6 +585,18 @@ If C<< $attr{href} >> does not look like a valid link URL, it returns the escape
 
 Returns C<< <img> >> tag with C<%attr> attributes.
 If C<< $attr{src} >> does not look like a valid image URL, it returns an empty string.
+
+=item C<path> => CODEREF($path)
+
+Returns the appropriate URL path for the given C<$path>.
+
+If C<$path> is relative, it returns the C<$path> unchanged.
+If C<$path> is absolute, it prepends the C<SCRIPT_NAME> to the C<$path>,
+so that you can use the path in HTML pages.
+
+=item C<script_name> => CODEREF()
+
+Returns the C<SCRIPT_NAME>.
 
 =item C<bb_level> => CODEREF($level)
 

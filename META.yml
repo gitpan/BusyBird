@@ -16,6 +16,7 @@ build_requires:
   HTTP::Request: '6.00'
   JSON: '0'
   Plack::Test: '0'
+  Storable: '0'
   Test::Builder: '0'
   Test::Exception: '0.31'
   Test::Memory::Cycle: '1.04'
@@ -54,6 +55,7 @@ requires:
   Carp: '0'
   DBD::SQLite: '0'
   DBI: '0'
+  Data::Diver: '0'
   Data::UUID: '0'
   DateTime: '0.70'
   DateTime::Duration: '0'
@@ -96,4 +98,4 @@ requires:
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
   repository: git://github.com/debug-ito/busybird.git
-version: '0.08'
+version: '0.09'

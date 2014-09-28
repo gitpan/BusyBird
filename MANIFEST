@@ -17,6 +17,7 @@ lib/BusyBird/Manual/Status.pod
 lib/BusyBird/Manual/Tutorial.pod
 lib/BusyBird/Manual/WebAPI.pod
 lib/BusyBird/Runner.pm
+lib/BusyBird/SafeData.pm
 lib/BusyBird/StatusStorage.pm
 lib/BusyBird/StatusStorage/Common.pm
 lib/BusyBird/StatusStorage/Memory.pm
@@ -62,12 +63,15 @@ t/Main.t
 t/Main_PSGI.t
 t/Main_PSGI_View.t
 t/Main_PSGI_View_config.t
+t/SafeData.t
 t/StatusStorage_Memory.t
 t/StatusStorage_SQLite.t
+t/testlib/CrazyStatus.pm
 t/testlib/HTTP.pm
 t/testlib/Main_Util.pm
 t/testlib/StatusHTML.pm
 t/testlib/StatusStorage/AEDelayed.pm
+t/testlib/StatusStorage/CrazyStatus.pm
 t/testlib/Timeline_Util.pm
 t/Timeline.t
 t/Util_future.t

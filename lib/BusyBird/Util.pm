@@ -6,6 +6,7 @@ use Carp;
 use Exporter qw(import);
 use BusyBird::DateTime::Format;
 use BusyBird::Log qw(bblog);
+use BusyBird::SafeData qw(safed);
 use DateTime;
 use 5.10.0;
 use Future::Q 0.040;
@@ -13,7 +14,8 @@ use File::HomeDir;
 use File::Spec;
 
 our @EXPORT_OK =
-    qw(set_param expand_param config_directory config_file_path sort_statuses split_with_entities future_of make_tracking);
+    qw(set_param expand_param config_directory config_file_path sort_statuses
+       split_with_entities future_of make_tracking vivifiable_as);
 our @CARP_NOT = qw(Future::Q);
 
 sub set_param {
@@ -62,6 +64,10 @@ sub config_file_path {
     return File::Spec->catfile(config_directory, @paths);
 }
 
+sub vivifiable_as {
+    return !defined($_[0]) || ref($_[0]) eq $_[1];
+}
+
 sub _epoch_undef {
     my ($datetime_str) = @_;
     my $dt = BusyBird::DateTime::Format->parse_datetime($datetime_str);
@@ -85,17 +91,14 @@ sub sort_statuses {
     my ($statuses) = @_;
     use sort 'stable';
     
-    my @dt_statuses = do {
-        no autovivification;
-        map {
-            my $acked_at = $_->{busybird}{acked_at}; ## avoid autovivification
-            [
-                $_,
-                _epoch_undef($acked_at),
-                _epoch_undef($_->{created_at}),
-            ];
-        } @$statuses;
-    };
+    my @dt_statuses = map {
+        my $safe_status = safed($_);
+        [
+            $_,
+            _epoch_undef($safe_status->val("busybird", "acked_at")),
+            _epoch_undef($safe_status->val("created_at")),
+        ];
+    } @$statuses;
     return [ map { $_->[0] } sort {
         foreach my $sort_key (1, 2) {
             my $ret = _sort_compare($a->[$sort_key], $b->[$sort_key]);
@@ -121,15 +124,24 @@ sub split_with_entities {
     if(!defined($text)) {
         croak "text must not be undef";
     }
-    $entities_hashref = {} if not defined $entities_hashref;
+    if(ref($entities_hashref) ne "HASH") {
+        return [_create_text_segment($text, 0, length($text))];
+    }
 
     ## create entity segments
     my @entity_segments = ();
     foreach my $entity_type (keys %$entities_hashref) {
-        foreach my $entity (@{$entities_hashref->{$entity_type}}) {
-            push(@entity_segments, _create_text_segment(
-                $text, $entity->{indices}[0], $entity->{indices}[1], $entity_type, $entity
-            ));
+        my $entities = $entities_hashref->{$entity_type};
+        next if ref($entities) ne "ARRAY";
+        foreach my $entity (@$entities) {
+            my $se = safed($entity);
+            my $start = $se->val("indices", 0);
+            my $end = $se->val("indices", 1);
+            if(defined($start) && defined($end) && $start <= $end) {
+                push(@entity_segments, _create_text_segment(
+                    $text, $start, $end, $entity_type, $entity
+                ));
+            }
         }
     }
     @entity_segments = sort { $a->{start} <=> $b->{start} } @entity_segments;
@@ -263,6 +275,7 @@ C<$text> is a string to be split. C<$entities_hashref> is a hash-ref which has t
 L<Twitter Entities|https://dev.twitter.com/docs/platform-objects/entities>.
 Each entity object annotates a part of C<$text> with such information as linked URLs, mentioned users,
 mentioned hashtags, etc.
+If C<$entities_hashref> doesn't conform to the said structure, it is ignored.
 
 The return value C<$segments_arrayref> is an array-ref of "segment" objects.
 A "segment" is a hash-ref containing a part of C<$text> and the entity object (if any) attached to it.
@@ -310,9 +323,11 @@ Example:
 Any entity object is required to have C<indices> field, which is an array-ref
 of starting and ending indices of the text part.
 The ending index must be greater than or equal to the starting index.
-Other fields in entity objects are optional.
+If an entitiy object does not meet this condition, that entity object is ignored.
 
-Entity objects must not overlap. In that case, the result is undefined.
+Except for C<indices>, all fields in entity objects are optional.
+
+Text ranges annotated by entity objects must not overlap. In that case, the result is undefined.
 
 A segment hash-ref has the following fields.
 

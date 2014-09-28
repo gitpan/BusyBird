@@ -11,6 +11,7 @@ use Encode qw(encode_utf8);
 use lib "t";
 use testlib::HTTP;
 use testlib::Main_Util;
+use testlib::CrazyStatus qw(crazy_statuses);
 
 BEGIN {
     use_ok("BusyBird::Main::PSGI::View");
@@ -44,7 +45,7 @@ sub create_main {
 {
     note("--- response methods");
     my $main = create_main();
-    my $view = new_ok("BusyBird::Main::PSGI::View", [main_obj => $main]);
+    my $view = new_ok("BusyBird::Main::PSGI::View", [main_obj => $main, script_name => ""]);
 
     test_psgi_response($view->response_notfound(), 404, "notfound");
     
@@ -73,7 +74,7 @@ sub create_main {
 {
     note("--- response_error_html");
     my $main = create_main();
-    my $view = new_ok("BusyBird::Main::PSGI::View", [main_obj => $main]);
+    my $view = new_ok("BusyBird::Main::PSGI::View", [main_obj => $main, script_name => ""]);
     foreach my $case (
         {in_code => 400, in_message => "bad request, man", exp_message => qr/bad request, man/},
         {in_code => 404, in_message => "no such page", exp_message => qr/no such page/},
@@ -86,9 +87,29 @@ sub create_main {
 }
 
 {
+    note("--- response_statuses should not croak even if crazy statuses are given");
+    my $main = create_main();
+    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main, script_name => "");
+    my @logs = ();
+    local $BusyBird::Log::Logger = sub {
+        push @logs, \@_;
+    };
+    foreach my $s (crazy_statuses()) {
+        @logs = ();
+        my $ret = $view->response_statuses(statuses => [$s], http_code => 200, format => 'html', timeline_name => 'test');
+        test_psgi_response($ret, 200, "$s->{id}");
+        is(scalar(grep { $_->[0] =~ /^(err|warn|crit|alert|fatal)/i } @logs), 0, "$s->{id}: no warning or error") or do {
+            diag(join "", map { "$_->[0]: $_->[1]\n" } @logs);
+        };
+        ## my $content = join "", @{$ret->[2]};
+        ## note("============\n$content");
+    }
+}
+
+{
     note("--- template_functions");
     my $main = create_main();
-    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main);
+    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main, script_name => "/apptop");
     my $funcs = $view->template_functions();
 
     note("--- -- js"); ## from SYNOPSIS of JavaScript::Value::Escape with a small modification
@@ -139,6 +160,18 @@ sub create_main {
         is($funcs->{image}->(@{$case->{args}}), $case->{exp}, "$case->{label} OK");
     }
 
+    note("--- -- path");
+    foreach my $case (
+        {arg => "relative/foo.png", exp => "relative/foo.png"},
+        {arg => "/absolute/foo.png", exp => "/apptop/absolute/foo.png"},
+        {arg => "", exp => ""},
+        {arg => "/", exp => "/apptop/"},
+    ) {
+        is($funcs->{path}->($case->{arg}), $case->{exp}, "$case->{arg}: OK");
+    }
+
+    is($funcs->{script_name}->(), "/apptop", "script_name() function OK");
+
     note("--- -- link to image");
     foreach my $case (
         {label => "valid url", url => 'http://hoge.com/img.png',
@@ -163,7 +196,7 @@ sub create_main {
 {
     note("--- template_functions_for_timeline");
     my $main = create_main();
-    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main);
+    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main, script_name => "");
     my $funcs = $view->template_functions_for_timeline('test');
     $main->set_config(
         time_zone => "UTC",
@@ -345,7 +378,17 @@ sub create_main {
                  {media_url => 'http://this.is.ok.com/hoge.png'}
              ] }
          }],
-         exp => ["http://this.is.ok.com/hoge.png"]}
+         exp => ["http://this.is.ok.com/hoge.png"]},
+        {label => "media entity with type = video",
+         args => [{
+             text => "hoge",
+             entities => { media => [
+                 { type => "video", media_url => "http://hoge.com/video.ogg" },
+                 { type => "photo", media_url => "http://hoge.com/photo.jpg" },
+                 {                  media_url => "http://hoge.com/no_type.png" },
+             ] }
+         }],
+         exp => ["http://hoge.com/photo.jpg", "http://hoge.com/no_type.png"]},
     ) {
         is_deeply $funcs->{bb_attached_image_urls}(@{$case->{args}}), $case->{exp}, "$case->{label}: OK";
     }
@@ -356,7 +399,7 @@ sub create_main {
     my $main = create_main();
     my $EXP_PAGER_ENTRY_MAX = 7;
     $main->set_config(timeline_list_pager_entry_max => $EXP_PAGER_ENTRY_MAX);
-    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main);
+    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main, script_name => "/apptop");
     foreach my $case (
         {
             label => "single page",
@@ -426,7 +469,7 @@ sub create_main {
     ) {
         note("--- -- case: $case->{label}");
         my $exp_pager_num = ($case->{input}{total_page_num} > 1 ? 2 : 0);
-        my $psgi_response = $view->response_timeline_list(%{$case->{input}}, script_name => "/apptop");
+        my $psgi_response = $view->response_timeline_list(%{$case->{input}});
         test_psgi_response($psgi_response, 200, "PSGI response OK");
         my $tree = testlib::HTTP->parse_html(join "", @{$psgi_response->[2]});
         
@@ -468,7 +511,7 @@ sub create_main {
 {
     note("--- response_timeline_list: timelines with names containing HTML special chars, URL special chars and Unicode chars.");
     my $main = create_main();
-    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main);
+    my $view = BusyBird::Main::PSGI::View->new(main_obj => $main, script_name => "/myapp");
     my @counts = (
         {name => '   ', counts => {total => 0},
          exp_display_name => "   ", exp_link => '/myapp/timelines/%20%20%20/'},
@@ -483,7 +526,6 @@ sub create_main {
          exp_link => '/myapp/timelines/%23%3F%3D%26%3D%3F%23/'},
     );
     my $psgi_response = $view->response_timeline_list(
-        script_name => "/myapp",
         timeline_unacked_counts => [map { +{name => $_->{name}, counts => $_->{counts}} } @counts],
         total_page_num => 1,
         cur_page => 0

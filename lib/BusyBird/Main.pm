@@ -6,6 +6,7 @@ use BusyBird::Timeline;
 use BusyBird::Watcher::Aggregator;
 use BusyBird::Util qw(config_file_path);
 use BusyBird::Log qw(bblog);
+use BusyBird::SafeData qw(safed);
 use Tie::IxHash;
 use Carp;
 use Scalar::Util qw(looks_like_number);
@@ -30,16 +31,15 @@ my %DEFAULT_CONFIG_GENERATOR = (
     post_button_url => sub { "https://twitter.com/intent/tweet" },
 
     status_permalink_builder => sub { return sub {
-        no autovivification;
         my ($status) = @_;
-        if(defined $status->{busybird}{status_permalink}) {
-            return $status->{busybird}{status_permalink};
-        }
-        my $id =   $status->{busybird}{original}{id}
-                || $status->{busybird}{original}{id_str}
-                || $status->{id}
-                || $status->{id_str};
-        my $username = $status->{user}{screen_name};
+        my $ss = safed($status);
+        my $permalink_in_status = $ss->val(qw(busybird status_permalink));
+        return $permalink_in_status if defined $permalink_in_status;
+        my $id =   $ss->val(qw(busybird original id))
+                || $ss->val(qw(busybird original id_str))
+                || $ss->val("id")
+                || $ss->val("id_str");
+        my $username = $ss->val(qw(user screen_name));
         if(defined($id) && defined($username) && $id =~ /^\d+$/) {
             return qq{https://twitter.com/$username/status/$id};
         }
@@ -71,22 +71,18 @@ my %DEFAULT_CONFIG_GENERATOR = (
     hidden => sub { 0 },
 
     attached_image_urls_builder => sub {
-        no autovivification;
-        my $get_media_urls = sub {
-            my ($entities_obj) = @_;
-            return try {
-                grep { defined($_) } map {
-                    $_->{media_url}
-                } @{$entities_obj->{media}};
-            }catch {
-                ()
-            };
-        };
         return sub {
             my ($status) = @_;
             tie my %url_set, "Tie::IxHash";
-            foreach my $url (map { $get_media_urls->($status->{$_}) } qw(entities extended_entities)) {
-                $url_set{$url} = 1;
+            my $ss = safed($status);
+            my @entities = map { $ss->array($_, "media") } qw(entities extended_entities);
+            foreach my $entity (@entities) {
+                my $sentity = safed($entity);
+                my $url = $sentity->val("media_url");
+                my $type = $sentity->val("type");
+                if(defined($url) && (!defined($type) || lc($type) eq "photo")) {
+                    $url_set{$url} = 1 if defined $url;
+                }
             }
             return keys %url_set;
         };
