@@ -27,7 +27,7 @@ requires 'Router::Simple'=> '0';
 requires 'Scalar::Util'=> '1.24';
 requires 'Storable'=> '2.27';
 requires 'Test::Builder'=> '0';
-requires 'Test::Exception'=> '0';
+requires 'Test::Fatal'=> '0.006';
 requires 'Test::More'=> '0.98';
 requires 'Text::Xslate'=> '1.60';
 requires 'Tie::IxHash'=> '0';
@@ -47,11 +47,12 @@ requires 'POSIX' => 0;
 requires 'Data::UUID' => 0;
 requires 'Data::Diver' => 0;
 requires 'Twiggy' => 0;
+requires 'EV';
 
 on 'test' => sub {
     requires 'Test::More'=> '0.98';
     requires 'Test::Builder'=> '0';
-    requires 'Test::Exception'=> '0.31';
+    requires 'Test::Fatal';
     requires 'Test::Memory::Cycle'=> '1.04';
     requires 'Test::MockObject'=> '1.09';
     requires 'Test::MockObject::Extends' => 0;

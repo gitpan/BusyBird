@@ -3,6 +3,7 @@ Build.PL
 Changes
 cpanfile
 lib/BusyBird.pm
+lib/BusyBird/Config.pm
 lib/BusyBird/Filter.pm
 lib/BusyBird/Filter/Twitter.pm
 lib/BusyBird/Flow.pm

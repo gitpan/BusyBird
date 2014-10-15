@@ -320,6 +320,19 @@ my %RESPONSE_FORMATTER_FOR_TL_GET_STATUSES = (
         my ($self, $timeline_name, $code, $response_object) = @_;
         return $self->response_json($code, $response_object);
     },
+    json_only_statuses => sub {
+        my ($self, $timeline_name, $code, $response_object) = @_;
+        my $res_array = defined($response_object->{error}) ? [] : $response_object->{statuses};
+        my $res_msg = try {
+            to_json($res_array, {ascii => 1});
+        }catch {
+            "[]"
+        };
+        return [
+            $code, ['Content-Type' => 'application/json; charset=utf-8'],
+            [$res_msg]
+        ];
+    },
 );
 
 sub response_statuses {
@@ -344,6 +357,8 @@ sub response_statuses {
 
 my %TIMELINE_CONFIG_FILTER_FOR = (
     timeline_web_notifications => sub { defined($_[0]) ? "$_[0]" : ""},
+    acked_statuses_load_count => sub { $_[0] =~ /^\d+$/ ? $_[0] : undef },
+    default_level_threshold => sub { $_[0] =~ /^\d+$/ ? $_[0] : undef},
 );
 
 sub _create_timeline_config_json {
@@ -510,7 +525,7 @@ HTTP response code.
 =item C<format> => STR (mandatory)
 
 A string specifying rendering format.
-Possible formats are: C<"html">, C<"json">.
+Possible formats are: C<"html">, C<"json">, C<"json_only_statuses">.
 If unknown format is given, it returns "400 Bad Request" error response.
 
 =item C<timeline_name> => STR (optional)
