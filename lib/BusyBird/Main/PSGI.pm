@@ -1,4 +1,5 @@
 package BusyBird::Main::PSGI;
+use v5.8.0;
 use strict;
 use warnings;
 use BusyBird::Util qw(set_param future_of);
@@ -12,7 +13,7 @@ use JSON qw(decode_json);
 use Scalar::Util qw(looks_like_number);
 use List::Util qw(min);
 use Carp;
-use Exporter qw(import);
+use Exporter 5.57 qw(import);
 use URI::Escape qw(uri_unescape);
 use Encode qw(decode_utf8);
 use Future::Q;

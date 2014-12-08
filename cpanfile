@@ -1,4 +1,4 @@
-requires 'perl' => "5.10.0";
+requires 'perl' => "v5.8.0";
 requires 'BusyBird::DateTime::Format' => "0.04";
 requires 'parent' => "0";
 requires 'Async::Queue'=> '0.02';
@@ -11,7 +11,7 @@ requires 'DateTime::Duration'=> '0';
 requires 'DateTime::Format::Strptime'=> '0';
 requires 'DateTime::TimeZone'=> '1.42';
 requires 'Encode'=> '0';
-requires 'Exporter'=> '0';
+requires 'Exporter'=> '5.57';
 requires 'File::ShareDir'=> '0';
 requires 'File::HomeDir' => '0';
 requires 'File::Spec'=> '0';
@@ -33,7 +33,7 @@ requires 'Text::Xslate'=> '1.60';
 requires 'Tie::IxHash'=> '0';
 requires 'Time::HiRes'=> '1.9720';
 requires 'Try::Tiny'=> '0.10';
-requires 'autovivification'=> '0.10';
+requires 'autovivification'=> '0.14';
 requires 'JavaScript::Value::Escape'=> '0';
 requires 'Cache::Memory::Simple'=> '1.01';
 requires 'URI::Escape'=> '0';
@@ -47,7 +47,6 @@ requires 'POSIX' => 0;
 requires 'Data::UUID' => 0;
 requires 'Data::Diver' => 0;
 requires 'Twiggy' => 0;
-requires 'EV';
 
 on 'test' => sub {
     requires 'Test::More'=> '0.98';

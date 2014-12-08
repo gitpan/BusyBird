@@ -1,7 +1,8 @@
 package BusyBird::Test::StatusStorage;
+use v5.8.0;
 use strict;
 use warnings;
-use Exporter qw(import);
+use Exporter 5.57 qw(import);
 use DateTime;
 use DateTime::Duration;
 use Test::More;

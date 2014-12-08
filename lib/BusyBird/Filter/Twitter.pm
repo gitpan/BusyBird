@@ -1,10 +1,11 @@
 package BusyBird::Filter::Twitter;
+use v5.8.0;
 use strict;
 use warnings;
 use BusyBird::DateTime::Format;
 use BusyBird::Util qw(split_with_entities vivifiable_as);
 use BusyBird::Filter qw(filter_map);
-use Exporter qw(import);
+use Exporter 5.57 qw(import);
 
 {
     my @names = qw(all search_status status_id unescape);

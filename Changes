@@ -1,4 +1,12 @@
-Revision history for BusyBird
+Revision history for Perl module BusyBird
+
+0.12    2014-12-08
+        - No functional changes.
+        [PACKAGING]
+        - Now it requires Exporter 5.57, because we import the import() function instead of inheritance.
+        - Now it requires perl 5.8.0 (previously it was 5.10.0, but in fact I didn't use any feature in 5.10.0).
+        - Now it requires autovivification 0.14 for bug fix of RT#99458.
+          It drops dependency on EV.
 
 0.11    2014-10-22
         [ENHANCEMENTS]
@@ -101,4 +109,4 @@ Revision history for BusyBird
         - Install BusyBird under user's home directory.
 
 0.01    2014-06-15
-        First version, released on an unsuspecting world.
+        - First version, released on an unsuspecting world.

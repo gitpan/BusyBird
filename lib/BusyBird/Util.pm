@@ -1,14 +1,14 @@
 package BusyBird::Util;
+use v5.8.0;
 use strict;
 use warnings;
 use Scalar::Util qw(blessed weaken);
 use Carp;
-use Exporter qw(import);
+use Exporter 5.57 qw(import);
 use BusyBird::DateTime::Format;
 use BusyBird::Log qw(bblog);
 use BusyBird::SafeData qw(safed);
 use DateTime;
-use 5.10.0;
 use Future::Q 0.040;
 use File::HomeDir;
 use File::Spec;

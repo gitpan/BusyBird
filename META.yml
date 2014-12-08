@@ -61,9 +61,8 @@ requires:
   DateTime::Duration: '0'
   DateTime::Format::Strptime: '0'
   DateTime::TimeZone: '1.42'
-  EV: '0'
   Encode: '0'
-  Exporter: '0'
+  Exporter: '5.57'
   File::Copy: '0'
   File::HomeDir: '0'
   File::ShareDir: '1.00'
@@ -92,11 +91,11 @@ requires:
   Try::Tiny: '0.10'
   Twiggy: '0'
   URI::Escape: '0'
-  autovivification: '0.10'
+  autovivification: '0.14'
   parent: '0'
-  perl: v5.10.0
+  perl: v5.8.0
   sort: '0'
 resources:
   bugtracker: https://github.com/debug-ito/busybird/issues
   repository: git://github.com/debug-ito/busybird.git
-version: '0.11'
+version: '0.12'

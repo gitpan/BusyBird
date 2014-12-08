@@ -1,4 +1,5 @@
 package BusyBird::Runner;
+use v5.8.0;
 use strict;
 use warnings;
 use Getopt::Long qw(GetOptionsFromArray :config no_ignore_case bundling);
@@ -6,7 +7,7 @@ use BusyBird::Util qw(config_directory config_file_path);
 use File::Spec;
 use Try::Tiny;
 use Plack::Runner ();
-use Exporter qw(import);
+use Exporter 5.57 qw(import);
 
 our @EXPORT_OK = qw(run);
 
